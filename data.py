@@ -80,6 +80,27 @@ def status_atual_por_mes(df_status):
     return out
 
 
+COLUNAS_BOARD = ["Sem status"] + STATUS_ORDEM + STATUS_DESVIOS
+
+
+def board_por_mes(status_atual_df, carteiras_df, mes):
+    """Monta as colunas do kanban pro mes selecionado: {status: [labels]} + mapa label -> carteira_id."""
+    ativas = carteiras_df[(carteiras_df["data_inicio"] <= mes) &
+                           (carteiras_df["data_fim"].isna() | (carteiras_df["data_fim"] >= mes))]
+    sa_mes = status_atual_df[status_atual_df["mes_referencia"] == mes] if not status_atual_df.empty else status_atual_df
+    merged = ativas.merge(sa_mes, on="carteira_id", how="left") if not sa_mes.empty else ativas.assign(status_atual=pd.NA, data_status_atual=pd.NaT)
+
+    colunas = {c: [] for c in COLUNAS_BOARD}
+    label_to_id = {}
+    for _, row in merged.iterrows():
+        status = row["status_atual"] if pd.notna(row.get("status_atual")) else "Sem status"
+        data_str = row["data_status_atual"].strftime("%d/%m") if pd.notna(row.get("data_status_atual")) else "sem data"
+        label = f"{row['carteira_id']}|{row['nome']} (desde {data_str})"
+        colunas.setdefault(status, []).append(label)
+        label_to_id[label] = row["carteira_id"]
+    return colunas, label_to_id
+
+
 def tempo_ciclo_por_mes(df_status):
     """Dias entre o primeiro evento do mes e o evento 'Enviado Cliente' (quando existe)."""
     if df_status.empty:

@@ -3,6 +3,7 @@ import datetime as dt
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from streamlit_sortables import sort_items
 
 import data as d
 
@@ -178,7 +179,7 @@ st.dataframe(d.completude_mensal(acomp_p), hide_index=True, width="stretch")
 st.divider()
 st.header("Edição")
 
-tab1, tab2 = st.tabs(["Editar PL do mês", "Registrar mudança de status"])
+tab1, tab2, tab3 = st.tabs(["Editar PL do mês", "Registrar mudança de status", "Quadro Kanban (arrastar)"])
 
 with tab1:
     mes_edit_label = st.selectbox("Mês", labels, index=len(labels) - 1, key="mes_edit_pl")
@@ -211,3 +212,22 @@ with tab2:
         d.append_status_event(carteira_sel, pd.Timestamp(mes_sel_label + "-01"), status_sel, pd.Timestamp(data_sel), obs_sel)
         st.success("Evento registrado. Recarregando...")
         st.rerun()
+
+with tab3:
+    st.caption("Arraste um card pra outra coluna pra registrar a mudança de status (grava a data de hoje automaticamente).")
+    mes_kanban_label = st.selectbox("Mês", labels, index=len(labels) - 1, key="mes_kanban")
+    mes_kanban = pd.Timestamp(mes_kanban_label + "-01")
+
+    colunas, label_to_id = d.board_por_mes(status_atual, df_carteiras, mes_kanban)
+    items_input = [{"header": c, "items": colunas.get(c, [])} for c in d.COLUNAS_BOARD]
+    coluna_antes = {item: grupo["header"] for grupo in items_input for item in grupo["items"]}
+
+    resultado = sort_items(items_input, multi_containers=True, direction="horizontal", key=f"kanban_{mes_kanban_label}")
+
+    for grupo in resultado:
+        for item in grupo["items"]:
+            if coluna_antes.get(item) != grupo["header"]:
+                carteira_id = label_to_id[item]
+                d.append_status_event(carteira_id, mes_kanban, grupo["header"], pd.Timestamp(dt.date.today()), "via kanban")
+                st.toast(f"{carteira_id} → {grupo['header']}")
+                st.rerun()
